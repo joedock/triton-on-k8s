@@ -304,5 +304,5 @@ gcloud container clusters resize triton-demo \
 
 Joe | Cloud Native Architect | Kubstronaut | NVIDIA-Certified AI Infrastructure
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://linkedin.com/in/in/joedockery-jackson)
-[![GitHub](https://img.shields.io/badge/GitHub-Follow-black)](https://github.com/YOUR-USERNAME)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://linkedin.com/in/joe-dockery-jackson-4a0a8a8)
+[![GitHub](https://img.shields.io/badge/GitHub-Follow-black)](https://github.com/joedock)
