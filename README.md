@@ -103,7 +103,7 @@ triton-on-k8s/
 ### 1. Clone and Set Up Environment
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/triton-on-k8s.git
+git clone https://github.com/joedock/triton-on-k8s.git
 cd triton-on-k8s
 
 python3 -m venv venv
@@ -160,8 +160,8 @@ gcloud container clusters get-credentials triton-demo \
 python3 export_model.py
 
 # Create GCS bucket and upload
-gsutil mb -p triton-demo-project -l us-central1 gs://YOUR-BUCKET-NAME
-gsutil -m cp -r model_repository/ gs://YOUR-BUCKET-NAME/
+gsutil mb -p triton-demo-project -l us-central1 gs://triton-model-repo-joedock
+gsutil -m cp -r model_repository/ gs://triton-model-repo-joedock/
 ```
 
 ### 5. Deploy Triton
@@ -304,5 +304,5 @@ gcloud container clusters resize triton-demo \
 
 Joe | Cloud Native Architect | Kubstronaut | NVIDIA-Certified AI Infrastructure
 
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://linkedin.com/in/YOUR-PROFILE)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue)](https://linkedin.com/in/in/joedockery-jackson)
 [![GitHub](https://img.shields.io/badge/GitHub-Follow-black)](https://github.com/YOUR-USERNAME)
