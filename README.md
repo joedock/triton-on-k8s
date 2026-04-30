@@ -223,16 +223,22 @@ helm install monitoring prometheus-community/kube-prometheus-stack \
 
 ```promql
 # Inference rate (req/s)
-rate(nv_inference_request_success[2m])
+rate(nv_inference_request_success[5m])
 
 # Average latency (ms)
-rate(nv_inference_request_duration_us[2m]) / rate(nv_inference_request_success[2m]) / 1000
+rate(nv_inference_request_duration_us[5m]) / rate(nv_inference_request_success[5m]) / 1000
 
 # Compute time (ms)
-rate(nv_inference_compute_infer_duration_us[2m]) / rate(nv_inference_count[2m]) / 1000
+rate(nv_inference_compute_infer_duration_us[5m]) / rate(nv_inference_count[5m]) / 1000
 
 # Queue time (ms)
-rate(nv_inference_queue_duration_us[2m]) / rate(nv_inference_count[2m]) / 1000
+rate(nv_inference_queue_duration_us[5m]) / rate(nv_inference_count[5m]) / 1000
+
+#Total GPU execution time (ms)
+(rate(nv_inference_compute_input_duration_us[5m]) + rate(nv_inference_compute_infer_duration_us[5m]) + rate(nv_inference_compute_output_duration_us[5m])) / rate(nv_inference_request_success[5m]) / 1000
+
+$GPU hardware ultilization
+nv_gpu_ulization
 ```
 
 ---
