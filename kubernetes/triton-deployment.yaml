@@ -14,10 +14,8 @@ spec:
     metadata:
       labels:
         app: triton
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8002"
     spec:
+      serviceAccountName: triton-ksa
       nodeSelector:
         cloud.google.com/gke-nodepool: gpu-pool
       tolerations:
@@ -27,9 +25,9 @@ spec:
       containers:
         - name: triton
           image: nvcr.io/nvidia/tritonserver:23.10-py3
+          command: ["tritonserver"]
           args:
-            - tritonserver
-            - --model-repository=gs://triton-model-repo-joedock/model_repository
+            - --model-repository=gs://triton-models-joedock-prod/model_repository
             - --strict-model-config=false
             - --log-verbose=1
           ports:
@@ -59,14 +57,3 @@ spec:
               port: 8000
             initialDelaySeconds: 120
             periodSeconds: 30
-          env:
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /var/secrets/google/gcs-key.json
-          volumeMounts:
-            - name: gcs-key
-              mountPath: /var/secrets/google
-              readOnly: true
-      volumes:
-        - name: gcs-key
-          secret:
-            secretName: gcs-credentials
