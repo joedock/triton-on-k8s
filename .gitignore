@@ -14,3 +14,10 @@ __pycache__/
 
 # Environment files
 .env
+
+# Credential files — defense-in-depth
+*.key
+*key.json
+*credentials*.json
+*-key.json
+service-account*.json
