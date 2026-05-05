@@ -27,18 +27,24 @@ echo "==> Enabling required APIs..."
 gcloud services enable container.googleapis.com storage.googleapis.com iamcredentials.googleapis.com
 
 echo "==> Creating GKE cluster with Workload Identity..."
-gcloud container clusters create ${CLUSTER_NAME} \
-  --zone ${ZONE} \
-  --num-nodes 1 \
-  --machine-type e2-standard-4 \
-  --workload-pool=${PROJECT_ID}.svc.id.goog \
-  --no-enable-autoupgrade
+if gcloud container clusters describe ${CLUSTER_NAME} --zone ${ZONE} >/dev/null 2>&1; then
+  echo "==> Cluster ${CLUSTER_NAME} already exists, skipping creation."
+else
+  gcloud container clusters create ${CLUSTER_NAME} \
+    --zone ${ZONE} \
+    --num-nodes 1 \
+    --machine-type e2-standard-4 \
+    --workload-pool=${PROJECT_ID}.svc.id.goog \
+    --no-enable-autoupgrade
+fi
 
-echo "==> Creating Google Service Account..."
+echo "==> Creating Google Service Account (if not exists)..."
+gcloud iam service-accounts describe ${GSA_EMAIL} >/dev/null 2>&1 || \
 gcloud iam service-accounts create ${GSA_NAME} \
-  --display-name="Triton GCS Model Repository Reader"
+    --display-name="Triton GCS Model Repository Reader"
 
-echo "==> Creating GCS bucket..."
+echo "==> Creating GCS bucket (if not exists)..."
+gsutil ls gs://${BUCKET_NAME} >/dev/null 2>&1 || \
 gsutil mb -p ${PROJECT_ID} -l ${REGION} gs://${BUCKET_NAME}
 
 echo "==> Granting least-privilege bucket access..."
@@ -48,11 +54,16 @@ gsutil iam ch serviceAccount:${GSA_EMAIL}:legacyBucketReader gs://${BUCKET_NAME}
 echo "==> Getting cluster credentials..."
 gcloud container clusters get-credentials ${CLUSTER_NAME} --zone ${ZONE}
 
-echo "==> Uploading model repository to GCS..."
+echo "==> Uploading model repository to GCS (if not already uploaded)..."
+gsutil ls gs://${BUCKET_NAME}/model_repository/ >/dev/null 2>&1 || \
 gsutil -m cp -r model_repository/ gs://${BUCKET_NAME}/
 
-echo "==> Creating namespace and KSA..."
+echo "==> Creating namespace (if not exists)..."
+kubectl get namespace ${NAMESPACE} >/dev/null 2>&1 || \
 kubectl create namespace ${NAMESPACE}
+
+echo "==> Creating KSA (if not exists)..."
+kubectl get serviceaccount ${KSA_NAME} -n ${NAMESPACE} >/dev/null 2>&1 || \
 kubectl create serviceaccount ${KSA_NAME} -n ${NAMESPACE}
 
 echo "==> Binding KSA to GSA via Workload Identity..."
