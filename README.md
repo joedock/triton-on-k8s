@@ -44,7 +44,7 @@ A production-grade AI inference platform built on Google Kubernetes Engine (GKE)
 ### CPU vs GPU Performance (ResNet50 — 50 inferences)
 
 | Metric | CPU (e2-standard-4) | GPU (NVIDIA T4) | Improvement |
-|--------|--------------------|-----------------||-------------|
+|--------|--------------------|-----------------|-------------|
 | Avg Request Latency | ~183ms | ~350ms | see note |
 | Avg Compute Time | ~182ms | ~350ms | see note |
 | Avg Queue Time | ~0.4ms | ~0.36ms | comparable |
