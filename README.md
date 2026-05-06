@@ -44,21 +44,21 @@ A production-grade AI inference platform built on Google Kubernetes Engine (GKE)
 ### CPU vs GPU Performance (ResNet50 — 50 inferences)
 
 | Metric | CPU (e2-standard-4) | GPU (NVIDIA T4) | Improvement |
-|--------|--------------------|-----------------|-------------|
+|--------|---------------------|-----------------|-------------|
 | Avg Request Latency | ~183ms | ~350ms | see note |
 | Avg Compute Time | ~182ms | ~350ms | see note |
 | Avg Queue Time | ~0.4ms | ~0.36ms | comparable |
 | Success Rate | 100% | 100% | matched |
-| Throughput (serial) | ~pending | ~1.44 req/s | baseline |
-| Batching ratio | N/A | 1.09x at 100us delay | improving |
+| Throughput (serial) | ~5.46 req/s | ~1.44 req/s | see note |
+| Batching ratio | N/A | 2.67x at 2000us | see benchmark table |
 
-
-> **Note on GPU latency:** At batch size 1 with minimal concurrent load,
-> GPU latency is comparable to CPU for small models like ResNet50. GPU
-> advantages emerge at scale — with dynamic batching and concurrent load,
-> throughput increases significantly. Week 2 benchmark plan: test at
-> max_queue_delay_microseconds values of 100us, 1000us, and 5000us under
-> concurrent load to quantify the batching advantage.
+> **Note on GPU vs CPU performance:** At batch size 1 with serial requests,
+> CPU outperforms GPU on both latency and throughput for small models like
+> ResNet50. This is expected — GPU advantages emerge under concurrent load
+> with dynamic batching enabled. At 2000us queue delay with 8 concurrent
+> requests, the dynamic batcher achieved a 2.67x batching ratio, meaning
+> 2.67 inferences per GPU execution vs 1.09x at the default 100us setting.
+> See the Dynamic Batching Benchmark table below for the full results.
 
 ### Dynamic Batching Benchmark (Queue Delay vs Batching Ratio)
 
