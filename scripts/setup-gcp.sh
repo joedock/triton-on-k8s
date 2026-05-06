@@ -74,6 +74,7 @@ gcloud iam service-accounts add-iam-policy-binding ${GSA_EMAIL} \
 echo "==> Annotating KSA with GSA email..."
 kubectl annotate serviceaccount ${KSA_NAME} \
   -n ${NAMESPACE} \
-  iam.gke.io/gcp-service-account=${GSA_EMAIL}
+  iam.gke.io/gcp-service-account=${GSA_EMAIL} \
+  --overwrite
 
 echo "==> Setup complete. Run create-gpu-pool.sh after GPU quota is approved."

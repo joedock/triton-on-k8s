@@ -27,5 +27,11 @@ instance_group [
 
 dynamic_batching {
   preferred_batch_size: [ 4, 8 ]
-  max_queue_delay_microseconds: 100
+  # max_queue_delay_microseconds: 2000
+  # Chosen based on benchmark data (May 6 2026):
+  # 100us → 1.09x batching ratio
+  # 2000us → 2.67x batching ratio  
+  # 5000us → 2.67x batching ratio (no additional gain over 2000us)
+  # 2000us selected as optimal — maximum batching benefit with minimum queue latency.
+  max_queue_delay_microseconds: 2000
 }
