@@ -124,35 +124,19 @@ controller providing TLS termination, authentication, and rate limiting in front
 
 ## 4. Configuration Rationale
 
-### 4.1 Prometheus Annotations
-The pod template includes `prometheus.io/scrape` and `prometheus.io/port` annotations. 
-These are only meaningful when a Prometheus scrape job is configured with `relabel_configs` 
-that consume them — a pattern common before the Prometheus Operator became dominant. 
-In my current `kube-prometheus-stack` deployment, discovery happens via 
-the `ServiceMonitor` CRD, so whether these annotations are active depends on the specific 
-Prometheus configuration the Operator generates. I'd verify their actual effect 
-with `kubectl exec` into the Prometheus pod and inspecting the generated scrape config. 
-If they're not being consumed, they're harmless but redundant and would come out in a cleanup pass.
+## 4.1 Prometheus Annotations
+The pod template includes `prometheus.io/scrape` and `prometheus.io/port` annotations.  
+These annotations are only used when a Prometheus scrape job is configured with `relabel_configs` the consumes them.  These were more common before the Prometheus Operator became the preferred method.  The current setup, discovery happens via the ServiceMonitor CRD, which makes these annotations likely redundant.  I will verify by inspecting the generated Prometheus scrape config once kube-prometheus-stack is reinstalled on the new cluster.  If they are not being used I will drop them from the config.
 
-### 4.2 Triton CLI Flags
-**`--strict-model-config=false`**
-This flag disables Triton's strict model configuration checking. Normally — when 
-the flag is set to its default of `true` — Triton requires every model in the repository 
-to have a complete `config.pbtxt`, and it will refuse to load any model that's missing 
-required fields. Setting the flag to `false` tells Triton to attempt to auto-generate missing 
-configuration by inspecting the model file's internal metadata, which works for backends 
-like ONNX, TensorRT, and traced TorchScript that carry input/output schema in the model itself.
+## 4.2 Triton CLI Flags
+--model-repository=gs://triton-models-joedock-prod/model_repository
+This flag tells Triton exactly where to pull its served models from—in our case, natively hitting a Google Cloud Storage (GCS) URI. There is no default value here; if you don't explicitly pass a repository path at startup, Triton won't even launch. I set this specific GCS path to decouple our model storage from the Triton pods running on GKE, keeping the compute layer stateless while pulling artifacts from a centralized bucket. We are definitely keeping this in production. In fact, this URI is already our production target. Relying on a highly available GCS bucket is really the only way we can horizontally scale these inference nodes without dealing with the headache of duplicating model files across local volumes.
 
-I would not keep this setting in production. The strict default is the better choice 
-because it forces every served model to have an explicit, version-controlled configuration file. 
-Auto-generated config is a development convenience — it makes iteration faster — but 
-in production, it creates implicit behavior that's harder to debug and review. 
-If a model loads successfully with autoconfig, you have no record of what configuration 
-Triton actually used, and any change in Triton's auto-detection logic between versions 
-could silently change behavior. Strict mode forces those decisions to be explicit and committed.
+--strict-model-config=false
+This flag tells Triton to stop demanding a complete config.pbtxt for every single model and instead try to auto-generate the missing configs by scraping internal model metadata. Out of the box, this defaults to true. I've flipped it to false here purely as a development convenience so we can iterate fast without writing boilerplate configs for every tweak. But I would absolutely never keep this in production. As we've drilled a dozen times, that strict default is mandatory. It forces every served model to have an explicit, version-controlled config file. Relying on autoconfig in production introduces implicit, under-the-hood behavior that is a nightmare to debug. If Triton's auto-detection logic changes silently, we'd have zero operational record of what config it actually used to serve the model.
 
-**`--log-verbose=1`**
-Enables verbose logging to assist with debugging request routing and model loading during the initial deployment phase. In a high-throughput production environment, this would be lowered to reduce disk I/O and log ingestion costs.
+--log-verbose=1
+This flag turns on detailed logging so we can actually see the granular mechanics of request routing and model loading. By default, it's set to 0 (disabled). I've bumped it to 1 for now because we need that deep visibility to trace inference requests and troubleshoot during this initial deployment phase. That said, this will not stay on in a high-throughput production environment. The sheer volume of verbose logs would hammer our disk I/O and unnecessarily spike our log ingestion costs without giving us much actionable value during normal steady-state ops.
 
 ### 4.3 Model Repository Structure & Lifecycle
 **Repository Layout**
@@ -164,28 +148,19 @@ Because the config describes the model's contract — its name, backend, inputs,
 Triton is running in the default `NONE` mode — all models in the repository are loaded at startup, with no runtime add/remove. This is appropriate for the current single-model demo. For production with multiple served models, rolling updates, or canary deployments, I'd switch to `EXPLICIT` and integrate the `POST /v2/repository/models/{name}/load` calls into a CI/CD pipeline. `POLL` mode is unsuitable for production due to a lack of atomicity, auditability, and rollback control.
 
 ## 5. IAM and Security
-Securing this workload requires tightly scoping access to the proprietary model weights stored in GCS. 
+Securing this workload means keeping a very tight lid on who (or what) can access our proprietary model weights over in GCS.
 
-**Role Bindings and Least Privilege**
-The service account for GCS access was created via `gcloud iam service-accounts create` and granted `roles/storage.objectViewer` and `roles/storage.legacyBucketReader` strictly on the target model repository bucket. These permissions follow the principle of least privilege: the service account can list bucket contents (`legacyBucketReader`) and read individual objects (`objectViewer`), which is the exact minimum needed for Triton to enumerate and load models from the model repository. 
+Role Bindings and Least Privilege
+When setting up the permissions for Triton, I kept things strictly limited to what it actually needs to function. I attached exactly two roles to the service account: roles/storage.objectViewer and roles/storage.legacyBucketReader. Together, these just let Triton list what's in the model repository bucket and read the actual files. I explicitly rejected broader roles like storage.objectAdmin or storage.admin because Triton has absolutely no business writing, modifying, or deleting objects in our storage. And obviously, tossing roles/owner at it was a hard pass—that's a massive, unnecessary blast radius.
 
-Several broader roles were explicitly considered and rejected:
-* `roles/storage.admin`: Overkill — grants bucket creation, deletion, and write permissions Triton does not need.
-* `roles/storage.objectAdmin`: Overkill — grants object write and overwrite permissions Triton does not need.
-* `roles/owner`: Catastrophically over-scoped — would grant the pod full control over the entire GCP project.
+The gcs-key.json Risk
+Right now, Triton authenticates by mounting a static service account key (gcs-key.json) via a Kubernetes Secret. It was the fastest way to get the artifact running yesterday, but I wouldn't leave it like this. It’s a long-lived credential sitting on disk. If someone botches a volume mount, accidentally commits that file to our git history, or leaks it into an image registry layer, our proprietary model weights are completely exposed.
 
-**The `gcs-key.json` Risk and Workload Identity**
-Currently, authentication uses a static service account key (`gcs-key.json`) mounted as a Kubernetes Secret. This is the simplest path for a learning artifact, but carries real risk: long-lived credentials with no automatic rotation, and exposure if the file leaks via misconfigured volume mounts, accidental git commits, or compromised image registries. 
+Workload Identity as the Fix
+The actual production fix here is GKE Workload Identity. Instead of passing around a physical JSON file, we just annotate our Kubernetes Service Account (KSA) so it maps directly to the Google Service Account (GSA). When Triton needs to pull a model, the GKE metadata server intercepts the request under the hood and hands back a short-lived, ephemeral token. The massive win here is that no physical key file ever exists on the cluster—meaning there's nothing to leak and nothing for us to manually rotate.
 
-The production-grade alternative—and the primary security roadmap item—is **GKE Workload Identity**. Workload Identity binds the Kubernetes Service Account directly to the Google Service Account at the GKE control plane level. With this architecture, no physical key file ever exists, no manual rotation is required, and the credential leak surface is functionally eliminated. 
-
-Further production hardening would also include:
-* Utilizing the **External Secrets Operator** for managing any residual API keys or database credentials.
-* Applying strict **NetworkPolicies** to isolate Triton pod communication.
-* Enforcing **PodSecurityStandards** to prevent privilege escalation at the container level.
-
-**The Infrastructure-as-Code Gap**
-Currently, IAM configuration was performed via manual `gcloud` commands and is not captured as code in the repo. This makes the security posture non-reproducible and prevents code review of permission grants. A production version would express Service Account creation, role bindings, and the Workload Identity binding as Terraform, both for reproducibility and to allow static analysis tools (`tfsec`, `checkov`) to flag misconfigurations before deployment.
+The IAM-as-Code Gap
+When I was building this out, I initially just hammered out the IAM setup using manual gcloud commands. I’ve since grabbed those commands and put them into our deployment script so we at least have a reproducible record, but it’s still a stopgap. To do this right, we need to express the service account creation, the role bindings, and the Workload Identity mapping in Terraform. That shifts us from running procedural shell scripts to actual declarative infrastructure-as-code, which lets us run static analysis tools like tfsec or checkov against our PRs to catch security gaps before they ever hit the cluster.
 
 ## 6. Cost Engineering
 Deploying GPUs is highly capital-intensive. 
