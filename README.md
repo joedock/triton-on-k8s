@@ -59,6 +59,23 @@ A production-grade AI inference platform built on Google Kubernetes Engine (GKE)
 > throughput increases significantly. Week 2 benchmark plan: test at
 > max_queue_delay_microseconds values of 100us, 1000us, and 5000us under
 > concurrent load to quantify the batching advantage.
+
+### Dynamic Batching Benchmark (Queue Delay vs Batching Ratio)
+
+| Queue Delay | Inference Count | Exec Count | Batching Ratio |
+|-------------|----------------|------------|----------------|
+| 100us (default) | 24 | 22 | 1.09x |
+| 2000us | 24 | 9 | 2.67x |
+| 5000us | 24 | 9 | 2.67x |
+
+**Finding:** Moving from 100us to 2000us more than doubled batching efficiency
+(1.09x → 2.67x). No additional gain at 5000us under this load pattern.
+**Selected value:** 2000us — maximum batching benefit at minimum queue latency cost.
+
+> **Test methodology:** 3 rounds of 8 concurrent inference requests per pass.
+> Batching ratio = inference_count delta / exec_count delta.
+> Higher ratio = more requests batched per GPU execution = better GPU utilization.
+
 ---
 
 ## 🛠️ Tech Stack
